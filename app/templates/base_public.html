@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · {{ config.EMPRESA_NOMBRE }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="public-body">
+  <div class="public-card">
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% if mensajes %}
+        <div class="flashes">
+          {% for categoria, mensaje in mensajes %}
+            <div class="flash flash-{{ categoria }}">{{ mensaje }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

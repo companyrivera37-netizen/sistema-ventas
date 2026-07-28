@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.nombres }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ cliente.nombres }}</h1>
+  <a class="btn" href="{{ url_for('ventas.nueva', cliente_id=cliente.id) }}">+ Nueva venta</a>
+</div>
+<div class="detalle-grid">
+  <div><strong>Celular</strong><br>{{ cliente.celular }}</div>
+  <div><strong>Dirección</strong><br>{{ cliente.direccion or '—' }}</div>
+  <div><strong>Cliente desde</strong><br>{{ cliente.creado_en[:10] }}</div>
+</div>
+
+<h2>Ventas</h2>
+<div class="tabla-scroll">
+<table class="tabla">
+  <thead><tr><th>Código</th><th>Producto</th><th>Fecha</th><th>Total</th><th>Saldo</th><th>Estado</th></tr></thead>
+  <tbody>
+    {% for v in ventas %}
+    <tr onclick="window.location='{{ url_for('ventas.detalle', venta_id=v.id) }}'">
+      <td>{{ v.codigo }}</td>
+      <td>{{ v.productos.nombre if v.productos else '—' }}</td>
+      <td>{{ v.fecha_venta }}</td>
+      <td>S/ {{ '%.2f'|format(v.monto_total) }}</td>
+      <td>S/ {{ '%.2f'|format(v.saldo_pendiente) }}</td>
+      <td><span class="badge badge-{{ v.estado }}">{{ v.estado }}</span></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">Este cliente aún no tiene ventas registradas.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

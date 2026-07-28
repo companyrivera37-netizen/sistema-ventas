@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Por cobrar{% endblock %}
+{% block content %}
+<h1>Por cobrar</h1>
+<p class="hint">Créditos con saldo pendiente, ordenados por la próxima fecha de cobro. Las filas en rojo ya vencieron.</p>
+<div class="tabla-scroll">
+<table class="tabla">
+  <thead><tr><th>Cliente</th><th>Producto</th><th>Saldo</th><th>Próximo cobro</th><th></th></tr></thead>
+  <tbody>
+    {% for v in ventas %}
+    <tr class="{{ 'fila-vencida' if v.proxima_fecha_cobro and v.proxima_fecha_cobro < hoy else '' }}">
+      <td onclick="window.location='{{ url_for('ventas.detalle', venta_id=v.id) }}'" style="cursor:pointer;">{{ v.clientes.nombres if v.clientes else '—' }}</td>
+      <td onclick="window.location='{{ url_for('ventas.detalle', venta_id=v.id) }}'" style="cursor:pointer;">{{ v.productos.nombre if v.productos else '—' }}</td>
+      <td onclick="window.location='{{ url_for('ventas.detalle', venta_id=v.id) }}'" style="cursor:pointer;">S/ {{ '%.2f'|format(v.saldo_pendiente) }}</td>
+      <td onclick="window.location='{{ url_for('ventas.detalle', venta_id=v.id) }}'" style="cursor:pointer;">{{ v.proxima_fecha_cobro or '—' }}</td>
+      <td><a class="btn btn-whatsapp btn-sm" href="{{ v.link_whatsapp }}" target="_blank" rel="noopener">Recordar</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No tienes créditos pendientes de cobro. 🎉</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

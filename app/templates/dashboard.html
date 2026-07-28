@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Inicio{% endblock %}
+{% block content %}
+<h1>Resumen</h1>
+<div class="cards">
+  <div class="card card-positivo"><span class="card-numero">S/ {{ '%.2f'|format(total_cobrado) }}</span><span class="card-label">Cobrado</span></div>
+  <div class="card card-alerta"><span class="card-numero">S/ {{ '%.2f'|format(total_por_cobrar) }}</span><span class="card-label">Por cobrar</span></div>
+  <div class="card"><span class="card-numero">S/ {{ '%.2f'|format(total_inversion) }}</span><span class="card-label">Inversión (costo de lo vendido)</span></div>
+  <div class="card card-positivo"><span class="card-numero">S/ {{ '%.2f'|format(ganancia_realizada) }}</span><span class="card-label">Ganancia realizada</span></div>
+</div>
+
+<div class="page-header">
+  <h2 style="margin-bottom:0;">Créditos pendientes de cobro</h2>
+  <a href="{{ url_for('ventas.por_cobrar') }}" class="btn btn-sm btn-secundario">Ver todos</a>
+</div>
+<div class="tabla-scroll">
+<table class="tabla">
+  <thead><tr><th>Cliente</th><th>Producto</th><th>Saldo</th><th>Próximo cobro</th></tr></thead>
+  <tbody>
+    {% for v in pendientes %}
+    <tr onclick="window.location='{{ url_for('ventas.detalle', venta_id=v.id) }}'"
+        class="{{ 'fila-vencida' if v.proxima_fecha_cobro and v.proxima_fecha_cobro < hoy else '' }}">
+      <td>{{ v.clientes.nombres if v.clientes else '—' }}</td>
+      <td>{{ v.productos.nombre if v.productos else '—' }}</td>
+      <td>S/ {{ '%.2f'|format(v.saldo_pendiente) }}</td>
+      <td>{{ v.proxima_fecha_cobro or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No hay créditos pendientes de cobro.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

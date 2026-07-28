@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Nueva venta{% endblock %}
+{% block content %}
+<h1>Nueva venta</h1>
+
+<h2>1. Elige el producto</h2>
+<div class="galeria-productos" id="galeria-productos">
+  {% for p in productos %}
+  <button type="button" class="producto-card" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio_venta }}">
+    {% if p.imagen_url %}
+      <img src="{{ p.imagen_url }}" alt="{{ p.nombre }}">
+    {% else %}
+      <div class="sin-foto">Sin foto</div>
+    {% endif %}
+    <div class="producto-card-info">
+      <span class="producto-card-nombre">{{ p.nombre }}</span>
+      <span class="producto-card-precio">S/ {{ '%.2f'|format(p.precio_venta) }}</span>
+    </div>
+  </button>
+  {% else %}
+  <p>No hay productos en el catálogo todavía. <a href="{{ url_for('productos.nuevo') }}">Agrega uno primero</a>.</p>
+  {% endfor %}
+</div>
+<p id="producto-elegido" class="hint">Ningún producto elegido todavía.</p>
+
+<h2>2. Datos de la venta</h2>
+<form method="post" class="form-grid" id="form-venta">
+  <input type="hidden" name="producto_id" id="producto_id" required>
+  <input type="hidden" name="cliente_id" id="cliente_id" required value="{{ cliente_prefill.id if cliente_prefill else '' }}">
+
+  <label>Cliente
+    <input type="text" id="cliente-buscar" placeholder="Escribe el nombre o celular del cliente"
+           autocomplete="off" value="{{ cliente_prefill.nombres if cliente_prefill else '' }}">
+  </label>
+  <div id="cliente-resultados" class="fotos" hidden></div>
+  <p class="hint">¿No está registrado? <a href="{{ url_for('clientes.nuevo') }}" target="_blank">Créalo aquí</a> y vuelve a esta pantalla.</p>
+
+  <label>Cantidad
+    <input type="number" name="cantidad" id="cantidad" min="1" value="1" required>
+  </label>
+  <label>Precio de venta (puedes ajustarlo si negociaste otro precio)
+    <input type="number" step="0.01" min="0" name="precio_unitario" id="precio_unitario" required>
+  </label>
+
+  <label>Tipo de venta</label>
+  <div class="tipo-venta-selector">
+    <label class="opcion-card">
+      <input type="radio" name="tipo_venta" value="contado" checked>
+      <span class="opcion-card-cuerpo">
+        <strong>Al contado</strong>
+        <span class="hint">Pago completo el mismo día</span>
+      </span>
+    </label>
+    <label class="opcion-card">
+      <input type="radio" name="tipo_venta" value="credito">
+      <span class="opcion-card-cuerpo">
+        <strong>Al crédito</strong>
+        <span class="hint">Adelanto + cuotas programadas</span>
+      </span>
+    </label>
+  </div>
+
+  <div class="campos-credito" id="campos-credito" hidden>
+    <label>Adelanto recibido (opcional)
+      <input type="number" step="0.01" min="0" name="adelanto" id="adelanto" value="0">
+    </label>
+    <label>¿Cómo se cobrará el saldo?
+      <select name="frecuencia_cobro" id="frecuencia_cobro">
+        <option value="quincena">Cada quincena</option>
+        <option value="fin_de_mes">Fin de mes</option>
+        <option value="manual">Una fecha específica</option>
+      </select>
+    </label>
+    <label class="campo-manual" id="campo-fecha-manual" hidden>Fecha de cobro
+      <input type="date" name="fecha_manual" id="fecha_manual">
+    </label>
+  </div>
+
+  <label>Notas (opcional)
+    <textarea name="notas" rows="3"></textarea>
+  </label>
+
+  <button type="submit" class="btn">Registrar venta</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>window.__PRODUCTO_ID_PREFILL__ = {{ producto_id_prefill|tojson }};</script>
+<script src="{{ url_for('static', filename='js/venta_form.js') }}" defer></script>
+{% endblock %}

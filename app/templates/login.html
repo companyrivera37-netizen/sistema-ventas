@@ -1,0 +1,15 @@
+{% extends "base_public.html" %}
+{% block title %}Iniciar sesión{% endblock %}
+{% block content %}
+<h1>{{ config.EMPRESA_NOMBRE }}</h1>
+<p class="subtitle">Panel de ventas</p>
+<form method="post" class="form-simple">
+  <label>Correo
+    <input type="email" name="email" required autofocus>
+  </label>
+  <label>Contraseña
+    <input type="password" name="password" required>
+  </label>
+  <button type="submit" class="btn">Ingresar</button>
+</form>
+{% endblock %}

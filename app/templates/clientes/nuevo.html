@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Nuevo cliente{% endblock %}
+{% block content %}
+<h1>Nuevo cliente</h1>
+<form method="post" class="form-grid">
+  <label>Nombres y apellidos
+    <input type="text" name="nombres" required autofocus>
+  </label>
+  <label>Celular / WhatsApp
+    <input type="text" name="celular" required placeholder="9XXXXXXXX">
+  </label>
+  <label>Dirección (opcional)
+    <input type="text" name="direccion">
+  </label>
+  <button type="submit" class="btn">Guardar cliente</button>
+</form>
+{% endblock %}
