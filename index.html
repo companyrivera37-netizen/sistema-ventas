@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sistema de Ventas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --azul-oscuro: #10213a;
+  --azul: #1c3d63;
+  --azul-claro: #2f6fb0;
+  --verde: #1f9d55;
+  --rojo: #c0392b;
+  --gris-100: #f5f7fa;
+  --gris-200: #e5e9ef;
+  --gris-400: #9aa5b1;
+  --gris-700: #4a5568;
+  --texto: #1a202c;
+  --borde: #dde3ea;
+  --fondo: #f7f9fc;
+  --ws: #25d366;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+  overflow-x: hidden;
+  padding-bottom: 76px; /* espacio para el nav inferior fijo */
+}
+a { color: var(--azul-claro); }
+h1, h2 { margin-top: 0; }
+h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gris-700); margin: 22px 0 10px; }
+
+/* ---------- Login ---------- */
+#vistaLogin { position: fixed; inset: 0; background: #fff; z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-box { background: #fff; padding: 40px 32px; border-radius: 16px; width: 100%; max-width: 380px; border: 1px solid var(--borde); text-align: center; }
+.login-box h1 { color: var(--azul); font-size: 1.3rem; margin-bottom: 4px; }
+.login-box p.subtitle { color: var(--gris-700); margin-top: 0; margin-bottom: 22px; }
+
+/* ---------- Formularios / inputs ---------- */
+input, select, textarea {
+  width: 100%; padding: 12px 14px; margin: 8px 0; border: 1px solid var(--borde);
+  border-radius: 10px; font-size: 16px; font-family: inherit; background: #fff;
+}
+label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-700); margin-top: 10px; }
+.btn {
+  display: inline-block; background: var(--azul-claro); color: #fff; border: none;
+  padding: 13px 20px; border-radius: 10px; font-weight: 700; font-size: 0.95rem;
+  cursor: pointer; text-align: center; width: 100%;
+}
+.btn:hover { background: var(--azul); }
+.btn:disabled { background: var(--gris-400); cursor: not-allowed; }
+.btn-sm { width: auto; padding: 8px 14px; font-size: 0.85rem; }
+.btn-secundario { background: var(--gris-400); }
+.btn-secundario:hover { background: var(--gris-700); }
+.btn-texto { background: none; color: var(--gris-700); text-decoration: underline; font-weight: 600; }
+.btn-texto:hover { background: none; color: var(--texto); }
+.btn-whatsapp { background: var(--ws); }
+.btn-whatsapp:hover { background: #1fae54; }
+.error-msg { color: var(--rojo); font-size: 0.85rem; min-height: 1.2em; margin-top: 8px; }
+.hint { color: var(--gris-700); font-size: 0.85em; }
+.texto-positivo { color: var(--verde); font-weight: 700; }
+.texto-negativo { color: var(--rojo); font-weight: 700; }
+
+/* ---------- App shell ---------- */
+#appShell { min-height: 100vh; }
+.app-header {
+  background: var(--azul); color: #fff; padding: 16px; position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.app-header .volver { background: rgba(255,255,255,0.15); border: none; color: #fff; width: 36px; height: 36px;
+  border-radius: 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.app-header h1 { margin: 0; font-size: 1.05rem; flex: 1; }
+.app-header .cerrar-sesion { background: none; border: none; color: #cbd5e0; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
+
+.container { padding: 16px; max-width: 620px; margin: 0 auto; }
+.vista { display: none; }
+.vista.activa { display: block; }
+
+.flash { padding: 12px 16px; border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; }
+.flash-success { background: #e6f7ec; color: #1f7a3f; border: 1px solid #b7e4c7; }
+.flash-error { background: #fdeceb; color: var(--rojo); border: 1px solid #f3c1bb; }
+
+/* ---------- Cards resumen (dashboard) ---------- */
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.card { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 16px; }
+.card-numero { font-size: 1.3rem; font-weight: 800; color: var(--azul); display: block; }
+.card-numero.positivo { color: var(--verde); }
+.card-numero.alerta { color: var(--rojo); }
+.card-label { color: var(--gris-700); font-size: 0.78rem; margin-top: 4px; display: block; }
+
+/* ---------- Tablas ---------- */
+.tabla-scroll { max-width: 100%; overflow-x: auto; margin-bottom: 16px; }
+.tabla { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; font-size: 0.85rem; }
+.tabla th, .tabla td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--borde); }
+.tabla th { background: var(--gris-100); color: var(--gris-700); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; }
+.tabla tbody tr.clicable { cursor: pointer; }
+.tabla tbody tr.clicable:active { background: var(--gris-100); }
+.tabla tr.fila-vencida { background: #fdeceb; }
+.badge { padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: capitalize; }
+.badge-pagado { background: #e6f7ec; color: #1f7a3f; }
+.badge-pendiente { background: #fff6dc; color: #9a7500; }
+
+/* ---------- Galeria de productos ---------- */
+.galeria-productos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.producto-card { background: #fff; border: 2px solid var(--borde); border-radius: 12px; overflow: hidden; cursor: pointer; padding: 0; text-align: left; font: inherit; color: inherit; }
+.producto-card img { width: 100%; height: 120px; object-fit: cover; display: block; background: var(--gris-100); }
+.producto-card .sin-foto { width: 100%; height: 120px; display: flex; align-items: center; justify-content: center; background: var(--gris-100); color: var(--gris-400); font-size: 0.75rem; }
+.producto-card .info { padding: 10px; }
+.producto-card .nombre { font-size: 0.82rem; font-weight: 700; display: block; margin-bottom: 3px; line-height: 1.2; }
+.producto-card .precio { color: var(--azul); font-weight: 800; font-size: 0.85rem; }
+.producto-card:hover { border-color: var(--azul-claro); }
+.producto-card.seleccionado { border-color: var(--verde); box-shadow: 0 0 0 2px rgba(31,157,85,0.25); }
+
+.fotos-detalle { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.fotos-detalle img { width: 130px; height: 130px; object-fit: cover; border-radius: 10px; border: 1px solid var(--borde); }
+
+.detalle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 16px; margin-bottom: 16px; font-size: 0.88rem; }
+.detalle-grid strong { display: block; color: var(--gris-700); font-size: 0.72rem; text-transform: uppercase; margin-bottom: 2px; }
+
+/* ---------- Selector tipo de venta (cards) ---------- */
+.tipo-venta-selector { display: flex; gap: 10px; margin: 8px 0; }
+.opcion-card { flex: 1; cursor: pointer; position: relative; }
+.opcion-card input { position: absolute; opacity: 0; width: 0; height: 0; }
+.opcion-card-cuerpo { display: block; border: 2px solid var(--borde); border-radius: 12px; padding: 14px 12px; background: #fff; text-align: center; }
+.opcion-card-cuerpo strong { display: block; margin-bottom: 4px; font-size: 0.9rem; }
+.opcion-card-cuerpo span { font-size: 0.75rem; color: var(--gris-700); }
+.opcion-card input:checked + .opcion-card-cuerpo { border-color: var(--verde); box-shadow: 0 0 0 2px rgba(31,157,85,0.25); }
+
+.campos-credito { display: none; flex-direction: column; border: 1px dashed var(--borde); border-radius: 10px; padding: 12px; background: var(--gris-100); margin-top: 8px; }
+.campos-credito.visible { display: flex; }
+.campo-manual { display: none; }
+.campo-manual.visible { display: block; }
+
+.resultados-busqueda { background: #fff; border: 1px solid var(--borde); border-radius: 10px; margin-top: -4px; margin-bottom: 8px; overflow: hidden; }
+.resultados-busqueda div { padding: 10px 14px; font-size: 0.9rem; cursor: pointer; border-bottom: 1px solid var(--gris-100); }
+.resultados-busqueda div:last-child { border-bottom: none; }
+.resultados-busqueda div:active { background: var(--gris-100); }
+
+/* ---------- Modales ---------- */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(16,33,58,0.55); align-items: center; justify-content: center; z-index: 2000; padding: 16px; }
+.modal-overlay.visible { display: flex; }
+.modal-box { background: #fff; border-radius: 16px; max-width: 440px; width: 100%; max-height: 88vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--borde); }
+.modal-header h2 { margin: 0; font-size: 1rem; text-transform: none; letter-spacing: 0; }
+.modal-cerrar { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--gris-700); }
+.modal-body { padding: 18px; }
+
+/* ---------- Nav inferior fijo ---------- */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--borde);
+  display: flex; z-index: 500; padding-bottom: env(safe-area-inset-bottom);
+}
+.bottom-nav button {
+  flex: 1; background: none; border: none; padding: 9px 2px 8px; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; font-size: 0.65rem; font-weight: 700; color: var(--gris-700); cursor: pointer;
+}
+.bottom-nav button .icono { font-size: 1.25rem; }
+.bottom-nav button.activo { color: var(--azul-claro); }
+
+.checkbox-linea { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.checkbox-linea input { width: auto; margin: 0; }
+.checkbox-linea label { margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="vistaLogin">
+  <div class="login-box">
+    <h1>Sistema de Ventas</h1>
+    <p class="subtitle">Ingresa para continuar</p>
+    <input type="email" id="loginEmail" placeholder="Correo" autocomplete="username">
+    <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password">
+    <button class="btn" id="btnLogin" onclick="manejarLogin()">Ingresar</button>
+    <p class="error-msg" id="loginError"></p>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="appShell" style="display:none;">
+  <div class="app-header">
+    <button class="volver" id="btnVolver" style="display:none;" onclick="volverAtras()">←</button>
+    <h1 id="tituloVista">Inicio</h1>
+    <button class="cerrar-sesion" onclick="cerrarSesion()">Salir</button>
+  </div>
+
+  <div class="container">
+    <div id="flashBox"></div>
+
+    <!-- ---- Dashboard ---- -->
+    <div class="vista" id="vistaDashboard">
+      <div class="cards">
+        <div class="card"><span class="card-numero positivo" id="dashCobrado">S/ 0.00</span><span class="card-label">Cobrado</span></div>
+        <div class="card"><span class="card-numero alerta" id="dashPorCobrar">S/ 0.00</span><span class="card-label">Por cobrar</span></div>
+        <div class="card"><span class="card-numero" id="dashInversion">S/ 0.00</span><span class="card-label">Inversión (costo vendido)</span></div>
+        <div class="card"><span class="card-numero positivo" id="dashGanancia">S/ 0.00</span><span class="card-label">Ganancia realizada</span></div>
+      </div>
+      <h2>Créditos próximos a cobrar</h2>
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th>Cliente</th><th>Saldo</th><th>Fecha</th></tr></thead>
+          <tbody id="dashPendientesBody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-secundario" onclick="mostrarVista('porCobrar')">Ver todos</button>
+    </div>
+
+    <!-- ---- Productos ---- -->
+    <div class="vista" id="vistaProductos">
+      <button class="btn" style="margin-bottom:14px;" onclick="abrirModalProducto()">+ Nuevo producto</button>
+      <div class="galeria-productos" id="productosGrid"></div>
+    </div>
+
+    <!-- ---- Producto detalle ---- -->
+    <div class="vista" id="vistaProductoDetalle">
+      <div class="fotos-detalle" id="pdFotos"></div>
+      <h1 id="pdNombre" style="font-size:1.15rem;"></h1>
+      <div class="detalle-grid">
+        <div><strong>Categoría</strong><span id="pdCategoria"></span></div>
+        <div><strong>Costo</strong><span id="pdCosto"></span></div>
+        <div><strong>Precio venta</strong><span id="pdPrecio"></span></div>
+        <div><strong>Stock</strong><span id="pdStock"></span></div>
+      </div>
+      <p id="pdDescripcion" style="white-space:pre-line; font-size:0.9rem;"></p>
+      <a class="btn btn-whatsapp" id="pdWhatsapp" href="#" target="_blank" rel="noopener" style="display:block; margin-bottom:10px;">Compartir por WhatsApp</a>
+      <button class="btn" style="margin-bottom:10px;" id="pdVender">Vender este producto</button>
+      <button class="btn btn-secundario" id="pdEditar">Editar</button>
+    </div>
+
+    <!-- ---- Clientes ---- -->
+    <div class="vista" id="vistaClientes">
+      <button class="btn" style="margin-bottom:14px;" onclick="abrirModalCliente()">+ Nuevo cliente</button>
+      <input type="text" id="clientesBuscar" placeholder="Buscar por nombre o celular" oninput="renderClientesListado()">
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th>Nombre</th><th>Celular</th></tr></thead>
+          <tbody id="clientesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---- Cliente detalle ---- -->
+    <div class="vista" id="vistaClienteDetalle">
+      <h1 id="cdNombre" style="font-size:1.15rem;"></h1>
+      <div class="detalle-grid">
+        <div><strong>Celular</strong><span id="cdCelular"></span></div>
+        <div><strong>Dirección</strong><span id="cdDireccion"></span></div>
+      </div>
+      <button class="btn" style="margin-bottom:14px;" id="cdNuevaVenta">+ Nueva venta</button>
+      <h2>Ventas</h2>
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th>Código</th><th>Producto</th><th>Total</th><th>Estado</th></tr></thead>
+          <tbody id="cdVentasBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---- Nueva venta ---- -->
+    <div class="vista" id="vistaVentaNueva">
+      <h2>1. Elige el producto</h2>
+      <div class="galeria-productos" id="ventaGaleria"></div>
+      <p class="hint" id="ventaProductoElegido">Ningún producto elegido todavía.</p>
+
+      <h2>2. Cliente</h2>
+      <input type="text" id="ventaClienteBuscar" placeholder="Escribe el nombre o celular" autocomplete="off" oninput="buscarClientesVenta()">
+      <div class="resultados-busqueda" id="ventaClienteResultados" style="display:none;"></div>
+      <button class="btn-texto" style="background:none;border:none;padding:0;" onclick="abrirModalCliente(true)">+ Crear cliente nuevo</button>
+
+      <h2>3. Detalles</h2>
+      <label>Cantidad</label>
+      <input type="number" id="ventaCantidad" min="1" value="1">
+      <label>Precio de venta</label>
+      <input type="number" step="0.01" min="0" id="ventaPrecioUnitario">
+
+      <label>Tipo de venta</label>
+      <div class="tipo-venta-selector">
+        <label class="opcion-card">
+          <input type="radio" name="ventaTipo" value="contado" checked onchange="toggleCamposCredito()">
+          <span class="opcion-card-cuerpo"><strong>Contado</strong><span>Pago completo</span></span>
+        </label>
+        <label class="opcion-card">
+          <input type="radio" name="ventaTipo" value="credito" onchange="toggleCamposCredito()">
+          <span class="opcion-card-cuerpo"><strong>Crédito</strong><span>Adelanto + cuotas</span></span>
+        </label>
+      </div>
+
+      <div class="campos-credito" id="ventaCamposCredito">
+        <label>Adelanto recibido (opcional)</label>
+        <input type="number" step="0.01" min="0" id="ventaAdelanto" value="0">
+        <label>¿Cómo se cobrará el saldo?</label>
+        <select id="ventaFrecuencia" onchange="toggleFechaManual()">
+          <option value="quincena">Cada quincena</option>
+          <option value="fin_de_mes">Fin de mes</option>
+          <option value="manual">Una fecha específica</option>
+        </select>
+        <div class="campo-manual" id="ventaCampoFechaManual">
+          <label>Fecha de cobro</label>
+          <input type="date" id="ventaFechaManual">
+        </div>
+      </div>
+
+      <label>Notas (opcional)</label>
+      <textarea id="ventaNotas" rows="2"></textarea>
+
+      <button class="btn" style="margin-top:14px;" onclick="guardarVenta()">Registrar venta</button>
+    </div>
+
+    <!-- ---- Venta detalle ---- -->
+    <div class="vista" id="vistaVentaDetalle">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1 id="vdCodigo" style="font-size:1.15rem;"></h1>
+        <span class="badge" id="vdEstadoBadge"></span>
+      </div>
+      <div class="detalle-grid">
+        <div><strong>Cliente</strong><span id="vdCliente"></span></div>
+        <div><strong>Producto</strong><span id="vdProducto"></span></div>
+        <div><strong>Cantidad</strong><span id="vdCantidad"></span></div>
+        <div><strong>Total</strong><span id="vdTotal"></span></div>
+        <div id="vdAdelantoBox"><strong>Adelanto</strong><span id="vdAdelanto"></span></div>
+        <div id="vdSaldoBox"><strong>Saldo pendiente</strong><span id="vdSaldo"></span></div>
+        <div id="vdFrecuenciaBox"><strong>Frecuencia</strong><span id="vdFrecuencia"></span></div>
+        <div id="vdProximaBox"><strong>Próximo cobro</strong><span id="vdProxima"></span></div>
+      </div>
+
+      <div id="vdCobroForm" style="display:none;">
+        <a class="btn btn-whatsapp" id="vdWhatsappRecordar" href="#" target="_blank" rel="noopener" style="display:block; margin-bottom:14px;">Recordar por WhatsApp</a>
+        <h2>Registrar cobro</h2>
+        <label>Monto recibido</label>
+        <input type="number" step="0.01" min="0.01" id="cobroMonto">
+        <label>Fecha</label>
+        <input type="date" id="cobroFecha">
+        <label>Método de pago</label>
+        <select id="cobroMetodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="yape">Yape</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+        <button class="btn" style="margin-top:10px;" onclick="registrarCobro()">Registrar cobro</button>
+
+        <h2>Reprogramar próximo cobro</h2>
+        <input type="date" id="vdNuevaFecha">
+        <button class="btn btn-secundario" onclick="actualizarProximaFecha()">Actualizar fecha</button>
+      </div>
+
+      <h2>Historial de cobros</h2>
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th>Fecha</th><th>Monto</th><th>Método</th></tr></thead>
+          <tbody id="vdCobrosBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---- Por cobrar ---- -->
+    <div class="vista" id="vistaPorCobrar">
+      <p class="hint">Créditos con saldo pendiente. Las filas en rojo ya vencieron.</p>
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th>Cliente</th><th>Producto</th><th>Saldo</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="porCobrarBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <button data-vista="dashboard" onclick="mostrarVista('dashboard')"><span class="icono">🏠</span>Inicio</button>
+    <button data-vista="ventaNueva" onclick="mostrarVista('ventaNueva')"><span class="icono">🛒</span>Vender</button>
+    <button data-vista="porCobrar" onclick="mostrarVista('porCobrar')"><span class="icono">💰</span>Cobrar</button>
+    <button data-vista="clientes" onclick="mostrarVista('clientes')"><span class="icono">👤</span>Clientes</button>
+    <button data-vista="productos" onclick="mostrarVista('productos')"><span class="icono">📦</span>Productos</button>
+  </nav>
+</div>
+
+<!-- ================= MODAL: nuevo/editar producto ================= -->
+<div class="modal-overlay" id="modalProducto">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="modalProductoTitulo">Nuevo producto</h2>
+      <button class="modal-cerrar" onclick="cerrarModal('modalProducto')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prodId">
+      <label>Nombre</label>
+      <input type="text" id="prodNombre">
+      <label>Categoría</label>
+      <select id="prodCategoria">
+        <option value="ropa">Ropa</option>
+        <option value="suplemento">Suplemento</option>
+        <option value="otro">Otro</option>
+      </select>
+      <label>Marca (opcional)</label>
+      <input type="text" id="prodMarca">
+      <label>Descripción (opcional)</label>
+      <textarea id="prodDescripcion" rows="4"></textarea>
+      <label>Costo (tu inversión por unidad)</label>
+      <input type="number" step="0.01" min="0" id="prodCosto">
+      <label>Precio de venta</label>
+      <input type="number" step="0.01" min="0" id="prodPrecioVenta">
+      <label>Stock (opcional)</label>
+      <input type="number" min="0" id="prodStock">
+      <label>Foto (opcional al editar, deja vacío para no cambiarla)</label>
+      <input type="file" id="prodFoto" accept="image/*">
+      <div class="checkbox-linea">
+        <input type="checkbox" id="prodActivo" checked>
+        <label for="prodActivo">Producto activo (visible en el catálogo)</label>
+      </div>
+      <p class="error-msg" id="prodError"></p>
+      <button class="btn" style="margin-top:12px;" onclick="guardarProducto()">Guardar producto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL: nuevo cliente ================= -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>Nuevo cliente</h2>
+      <button class="modal-cerrar" onclick="cerrarModal('modalCliente')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label>Nombres y apellidos</label>
+      <input type="text" id="cliNombres">
+      <label>Celular / WhatsApp</label>
+      <input type="text" id="cliCelular" placeholder="9XXXXXXXX">
+      <label>Dirección (opcional)</label>
+      <input type="text" id="cliDireccion">
+      <p class="error-msg" id="cliError"></p>
+      <button class="btn" style="margin-top:12px;" onclick="guardarCliente()">Guardar cliente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   CONFIGURACION SUPABASE
+   ========================================================= */
+const { createClient } = supabase;
+const SB_URL = 'https://oesrqgkyrhavxontdwtf.supabase.co';
+const SB_KEY = 'sb_publishable_Qd9dh6Q9TBqijI4-AScF1A_bVB0OxBt';
+const client = createClient(SB_URL, SB_KEY);
+
+const EMPRESA_WHATSAPP = ''; // opcional, no se usa por ahora
+
+/* =========================================================
+   ESTADO GLOBAL
+   ========================================================= */
+let sesion = null;
+let productos = [];         // catalogo completo (activos)
+let clientes = [];          // cache simple para listado/detalle
+let ventaSeleccion = { productoId: null, clienteId: null, clienteNombre: '' };
+let clienteVinoDeVenta = false; // si el modal "nuevo cliente" se abrio desde el flujo de venta
+let ventaDetalleActual = null;  // id de la venta abierta en vistaVentaDetalle
+let clienteDetalleActual = null;
+let pilaVistas = [];             // para el boton "volver"
+
+/* =========================================================
+   FECHAS (sin depender de Date + timezone -- todo en UTC neutro)
+   ========================================================= */
+function hoyStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function parseFechaUTC(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+function formatFechaUTC(date) { return date.toISOString().slice(0, 10); }
+function sumarDias(fechaStr, dias) {
+  const d = parseFechaUTC(fechaStr);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return formatFechaUTC(d);
+}
+function finDeMes(fechaStr) {
+  const d = parseFechaUTC(fechaStr);
+  const anio = d.getUTCFullYear(), mes = d.getUTCMonth();
+  const ultimoDiaMesActual = new Date(Date.UTC(anio, mes + 1, 0));
+  if (d.getTime() < ultimoDiaMesActual.getTime()) return formatFechaUTC(ultimoDiaMesActual);
+  return formatFechaUTC(new Date(Date.UTC(anio, mes + 2, 0)));
+}
+function calcularProximaFecha(frecuencia, fechaBaseStr, fechaManualStr) {
+  if (frecuencia === 'quincena') return sumarDias(fechaBaseStr, 15);
+  if (frecuencia === 'fin_de_mes') return finDeMes(fechaBaseStr);
+  if (frecuencia === 'manual') return fechaManualStr || null;
+  return null;
+}
+
+/* =========================================================
+   UTILIDADES UI
+   ========================================================= */
+function money(n) { return 'S/ ' + Number(n || 0).toFixed(2); }
+function mostrarFlash(mensaje, tipo) {
+  const box = document.getElementById('flashBox');
+  box.innerHTML = `<div class="flash flash-${tipo}">${mensaje}</div>`;
+  setTimeout(() => { box.innerHTML = ''; }, 4000);
+}
+function abrirModal(id) { document.getElementById(id).classList.add('visible'); }
+function cerrarModal(id) { document.getElementById(id).classList.remove('visible'); }
+function normalizarCelularPE(celular) {
+  const numero = (celular || '').replace(/\D/g, '');
+  if (numero.length === 9 && numero.startsWith('9')) return '51' + numero;
+  return numero;
+}
+
+/* =========================================================
+   NAVEGACION ENTRE VISTAS
+   ========================================================= */
+const TITULOS = {
+  dashboard: 'Inicio', productos: 'Productos', productoDetalle: 'Producto',
+  clientes: 'Clientes', clienteDetalle: 'Cliente', ventaNueva: 'Nueva venta',
+  ventaDetalle: 'Venta', porCobrar: 'Por cobrar',
+};
+const VISTAS_PRINCIPALES = ['dashboard', 'ventaNueva', 'porCobrar', 'clientes', 'productos'];
+
+async function mostrarVista(nombre, agregarAPila = true) {
+  document.querySelectorAll('.vista').forEach(v => v.classList.remove('activa'));
+  document.getElementById('vista' + nombre.charAt(0).toUpperCase() + nombre.slice(1)).classList.add('activa');
+  document.getElementById('tituloVista').textContent = TITULOS[nombre] || 'Sistema de Ventas';
+  document.getElementById('btnVolver').style.display = VISTAS_PRINCIPALES.includes(nombre) ? 'none' : 'flex';
+  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.toggle('activo', b.dataset.vista === nombre));
+
+  if (agregarAPila) {
+    if (VISTAS_PRINCIPALES.includes(nombre)) pilaVistas = [];
+    else pilaVistas.push(nombre);
+  }
+
+  if (nombre === 'dashboard') await cargarDashboard();
+  else if (nombre === 'productos') await cargarProductos();
+  else if (nombre === 'clientes') { await cargarClientesTodos(); renderClientesListado(); }
+  else if (nombre === 'ventaNueva') await prepararVentaNueva();
+  else if (nombre === 'porCobrar') await cargarPorCobrar();
+}
+function volverAtras() {
+  pilaVistas.pop();
+  const previa = pilaVistas.length ? pilaVistas[pilaVistas.length - 1] : 'dashboard';
+  mostrarVista(previa, false);
+}
+
+/* =========================================================
+   AUTENTICACION
+   ========================================================= */
+async function manejarLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('btnLogin');
+  const errorEl = document.getElementById('loginError');
+  errorEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  btn.disabled = false; btn.textContent = 'Ingresar';
+  if (error) { errorEl.textContent = 'Correo o contraseña incorrectos'; return; }
+  sesion = data.session;
+  iniciarApp();
+}
+async function cerrarSesion() { await client.auth.signOut(); location.reload(); }
+async function revisarSesion() {
+  const { data } = await client.auth.getSession();
+  if (data.session) { sesion = data.session; iniciarApp(); }
+}
+function iniciarApp() {
+  document.getElementById('vistaLogin').style.display = 'none';
+  document.getElementById('appShell').style.display = 'block';
+  mostrarVista('dashboard');
+}
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+async function cargarDashboard() {
+  const { data: ventas } = await client.from('ventas').select(
+    'id, tipo_venta, monto_total, costo_unitario, cantidad, adelanto, saldo_pendiente, estado, proxima_fecha_cobro, clientes(nombres), productos(nombre)'
+  );
+  const { data: cobros } = await client.from('cobros').select('venta_id, monto');
+  const cobradoPorVenta = {};
+  (cobros || []).forEach(c => { cobradoPorVenta[c.venta_id] = (cobradoPorVenta[c.venta_id] || 0) + Number(c.monto); });
+
+  let totalCobrado = 0, totalInversion = 0, totalPorCobrar = 0, gananciaRealizada = 0;
+  (ventas || []).forEach(v => {
+    const costoTotalVenta = Number(v.costo_unitario) * v.cantidad;
+    totalInversion += costoTotalVenta;
+    let cobradoVenta;
+    if (v.tipo_venta === 'contado') {
+      cobradoVenta = Number(v.monto_total);
+    } else {
+      cobradoVenta = Number(v.adelanto) + (cobradoPorVenta[v.id] || 0);
+      totalPorCobrar += Number(v.saldo_pendiente);
+    }
+    totalCobrado += cobradoVenta;
+    const montoTotal = Number(v.monto_total);
+    if (montoTotal > 0) {
+      const margenVenta = montoTotal - costoTotalVenta;
+      gananciaRealizada += cobradoVenta * (margenVenta / montoTotal);
+    }
+  });
+
+  document.getElementById('dashCobrado').textContent = money(totalCobrado);
+  document.getElementById('dashPorCobrar').textContent = money(totalPorCobrar);
+  document.getElementById('dashInversion').textContent = money(totalInversion);
+  document.getElementById('dashGanancia').textContent = money(gananciaRealizada);
+
+  const pendientes = (ventas || []).filter(v => v.estado === 'pendiente')
+    .sort((a, b) => (a.proxima_fecha_cobro || '9999-99-99').localeCompare(b.proxima_fecha_cobro || '9999-99-99'))
+    .slice(0, 5);
+  const hoy = hoyStr();
+  document.getElementById('dashPendientesBody').innerHTML = pendientes.length ? pendientes.map(v => `
+    <tr class="clicable ${v.proxima_fecha_cobro && v.proxima_fecha_cobro < hoy ? 'fila-vencida' : ''}" onclick="abrirVentaDetalle('${v.id}')">
+      <td>${v.clientes ? v.clientes.nombres : '—'}</td>
+      <td>${money(v.saldo_pendiente)}</td>
+      <td>${v.proxima_fecha_cobro || '—'}</td>
+    </tr>`).join('') : '<tr><td colspan="3">No hay créditos pendientes.</td></tr>';
+}
+
+/* =========================================================
+   PRODUCTOS
+   ========================================================= */
+async function cargarProductos() {
+  const { data } = await client.from('productos').select('*').eq('activo', true).order('nombre');
+  productos = data || [];
+  renderProductosGrid();
+}
+function tarjetaProductoHTML(p, onclickJS) {
+  const img = p.imagen_url ? `<img src="${p.imagen_url}" alt="${p.nombre}">` : `<div class="sin-foto">Sin foto</div>`;
+  return `<button type="button" class="producto-card" onclick="${onclickJS}">
+    ${img}
+    <div class="info"><span class="nombre">${p.nombre}</span><span class="precio">${money(p.precio_venta)}</span></div>
+  </button>`;
+}
+function renderProductosGrid() {
+  const cont = document.getElementById('productosGrid');
+  cont.innerHTML = productos.length ? productos.map(p => tarjetaProductoHTML(p, `abrirProductoDetalle('${p.id}')`)).join('') : '<p>Aún no hay productos en el catálogo.</p>';
+}
+async function abrirProductoDetalle(id) {
+  let p = productos.find(x => x.id === id);
+  if (!p) { const { data } = await client.from('productos').select('*').eq('id', id).single(); p = data; }
+  if (!p) return;
+  document.getElementById('pdFotos').innerHTML = [p.imagen_url, p.imagen_url_2, p.imagen_url_3]
+    .filter(Boolean).map(u => `<img src="${u}">`).join('') || '';
+  document.getElementById('pdNombre').textContent = p.nombre;
+  document.getElementById('pdCategoria').textContent = p.categoria;
+  document.getElementById('pdCosto').textContent = money(p.costo);
+  document.getElementById('pdPrecio').textContent = money(p.precio_venta);
+  document.getElementById('pdStock').textContent = (p.stock === null || p.stock === undefined) ? 'No controlado' : p.stock;
+  document.getElementById('pdDescripcion').textContent = p.descripcion || '';
+  document.getElementById('pdWhatsapp').href = linkWhatsappProducto(p);
+  document.getElementById('pdVender').onclick = () => { ventaSeleccion.productoId = p.id; mostrarVista('ventaNueva'); };
+  document.getElementById('pdEditar').onclick = () => abrirModalProducto(p);
+  mostrarVista('productoDetalle');
+}
+function linkWhatsappProducto(p) {
+  const partes = [p.nombre];
+  if (p.descripcion) partes.push(p.descripcion.trim());
+  return 'https://wa.me/?text=' + encodeURIComponent(partes.join('\n\n'));
+}
+
+function abrirModalProducto(producto) {
+  document.getElementById('prodError').textContent = '';
+  document.getElementById('modalProductoTitulo').textContent = producto ? 'Editar producto' : 'Nuevo producto';
+  document.getElementById('prodId').value = producto ? producto.id : '';
+  document.getElementById('prodNombre').value = producto ? producto.nombre : '';
+  document.getElementById('prodCategoria').value = producto ? producto.categoria : 'ropa';
+  document.getElementById('prodMarca').value = producto ? (producto.marca || '') : '';
+  document.getElementById('prodDescripcion').value = producto ? (producto.descripcion || '') : '';
+  document.getElementById('prodCosto').value = producto ? producto.costo : '';
+  document.getElementById('prodPrecioVenta').value = producto ? producto.precio_venta : '';
+  document.getElementById('prodStock').value = (producto && producto.stock !== null && producto.stock !== undefined) ? producto.stock : '';
+  document.getElementById('prodFoto').value = '';
+  document.getElementById('prodActivo').checked = producto ? !!producto.activo : true;
+  abrirModal('modalProducto');
+}
+async function subirImagenProducto(file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const ruta = `catalogo/${crypto.randomUUID()}.${ext}`;
+  const { error } = await client.storage.from('productos').upload(ruta, file, { contentType: file.type });
+  if (error) throw error;
+  const { data } = client.storage.from('productos').getPublicUrl(ruta);
+  return data.publicUrl;
+}
+async function guardarProducto() {
+  const errorEl = document.getElementById('prodError');
+  errorEl.textContent = '';
+  const id = document.getElementById('prodId').value;
+  const nombre = document.getElementById('prodNombre').value.trim();
+  const precioVenta = document.getElementById('prodPrecioVenta').value;
+  if (!nombre || !precioVenta) { errorEl.textContent = 'Nombre y precio de venta son obligatorios.'; return; }
+
+  const datos = {
+    nombre,
+    categoria: document.getElementById('prodCategoria').value,
+    marca: document.getElementById('prodMarca').value.trim() || null,
+    descripcion: document.getElementById('prodDescripcion').value.trim() || null,
+    costo: Number(document.getElementById('prodCosto').value || 0),
+    precio_venta: Number(precioVenta),
+    stock: document.getElementById('prodStock').value ? Number(document.getElementById('prodStock').value) : null,
+    activo: document.getElementById('prodActivo').checked,
+  };
+
+  const foto = document.getElementById('prodFoto').files[0];
+  try {
+    if (foto) datos.imagen_url = await subirImagenProducto(foto);
+    if (id) {
+      await client.from('productos').update(datos).eq('id', id);
+    } else {
+      datos.origen = 'manual';
+      await client.from('productos').insert(datos);
+    }
+  } catch (e) {
+    errorEl.textContent = 'Error al guardar: ' + e.message;
+    return;
+  }
+  cerrarModal('modalProducto');
+  mostrarFlash('Producto guardado correctamente', 'success');
+  await cargarProductos();
+}
+
+/* =========================================================
+   CLIENTES
+   ========================================================= */
+async function cargarClientesTodos() {
+  const { data } = await client.from('clientes').select('*').order('creado_en', { ascending: false }).limit(200);
+  clientes = data || [];
+}
+function renderClientesListado() {
+  const termino = document.getElementById('clientesBuscar').value.trim().toLowerCase();
+  const filtrados = termino
+    ? clientes.filter(c => c.nombres.toLowerCase().includes(termino) || (c.celular || '').includes(termino))
+    : clientes;
+  document.getElementById('clientesBody').innerHTML = filtrados.length ? filtrados.map(c => `
+    <tr class="clicable" onclick="abrirClienteDetalle('${c.id}')"><td>${c.nombres}</td><td>${c.celular}</td></tr>
+  `).join('') : '<tr><td colspan="2">Aún no hay clientes registrados.</td></tr>';
+}
+async function abrirClienteDetalle(id) {
+  let c = clientes.find(x => x.id === id);
+  if (!c) { const { data } = await client.from('clientes').select('*').eq('id', id).single(); c = data; }
+  if (!c) return;
+  clienteDetalleActual = c;
+  document.getElementById('cdNombre').textContent = c.nombres;
+  document.getElementById('cdCelular').textContent = c.celular;
+  document.getElementById('cdDireccion').textContent = c.direccion || '—';
+  document.getElementById('cdNuevaVenta').onclick = () => { ventaSeleccion.clienteId = c.id; ventaSeleccion.clienteNombre = c.nombres; mostrarVista('ventaNueva'); };
+
+  const { data: ventas } = await client.from('ventas').select('id, codigo, monto_total, estado, productos(nombre)').eq('cliente_id', id).order('creado_en', { ascending: false });
+  document.getElementById('cdVentasBody').innerHTML = (ventas || []).length ? ventas.map(v => `
+    <tr class="clicable" onclick="abrirVentaDetalle('${v.id}')">
+      <td>${v.codigo}</td><td>${v.productos ? v.productos.nombre : '—'}</td><td>${money(v.monto_total)}</td>
+      <td><span class="badge badge-${v.estado}">${v.estado}</span></td>
+    </tr>`).join('') : '<tr><td colspan="4">Sin ventas todavía.</td></tr>';
+  mostrarVista('clienteDetalle');
+}
+function abrirModalCliente(desdeVenta) {
+  clienteVinoDeVenta = !!desdeVenta;
+  document.getElementById('cliError').textContent = '';
+  document.getElementById('cliNombres').value = '';
+  document.getElementById('cliCelular').value = '';
+  document.getElementById('cliDireccion').value = '';
+  abrirModal('modalCliente');
+}
+async function guardarCliente() {
+  const errorEl = document.getElementById('cliError');
+  const nombres = document.getElementById('cliNombres').value.trim();
+  const celular = document.getElementById('cliCelular').value.trim();
+  if (!nombres || !celular) { errorEl.textContent = 'Nombre y celular son obligatorios.'; return; }
+  const datos = { nombres, celular, direccion: document.getElementById('cliDireccion').value.trim() || null };
+  const { data, error } = await client.from('clientes').insert(datos).select().single();
+  if (error) { errorEl.textContent = 'Error al guardar: ' + error.message; return; }
+  cerrarModal('modalCliente');
+  mostrarFlash('Cliente registrado correctamente', 'success');
+  if (clienteVinoDeVenta) {
+    ventaSeleccion.clienteId = data.id;
+    ventaSeleccion.clienteNombre = data.nombres;
+    document.getElementById('ventaClienteBuscar').value = data.nombres;
+    document.getElementById('ventaClienteResultados').style.display = 'none';
+  }
+}
+
+/* =========================================================
+   NUEVA VENTA
+   ========================================================= */
+async function prepararVentaNueva() {
+  await cargarProductos();
+  document.getElementById('ventaGaleria').innerHTML = productos.map(p =>
+    tarjetaProductoHTML(p, `elegirProductoVenta('${p.id}')`)
+  ).join('');
+  if (ventaSeleccion.productoId) elegirProductoVenta(ventaSeleccion.productoId, false);
+  if (ventaSeleccion.clienteId) document.getElementById('ventaClienteBuscar').value = ventaSeleccion.clienteNombre;
+  document.getElementById('ventaCantidad').value = 1;
+  document.querySelector('input[name="ventaTipo"][value="contado"]').checked = true;
+  toggleCamposCredito();
+}
+function elegirProductoVenta(id, marcarSeleccion = true) {
+  const p = productos.find(x => x.id === id);
+  if (!p) return;
+  ventaSeleccion.productoId = id;
+  document.getElementById('ventaPrecioUnitario').value = p.precio_venta;
+  document.getElementById('ventaProductoElegido').innerHTML = `<span class="texto-positivo">Elegiste: ${p.nombre}</span>`;
+  if (marcarSeleccion !== false) {
+    document.querySelectorAll('#ventaGaleria .producto-card').forEach(c => c.classList.remove('seleccionado'));
+  }
+  document.querySelectorAll('#ventaGaleria .producto-card').forEach((c, i) => {
+    if (productos[i] && productos[i].id === id) c.classList.add('seleccionado');
+  });
+}
+let debounceClienteVenta = null;
+function buscarClientesVenta() {
+  ventaSeleccion.clienteId = null;
+  clearTimeout(debounceClienteVenta);
+  const termino = document.getElementById('ventaClienteBuscar').value.trim();
+  const box = document.getElementById('ventaClienteResultados');
+  if (termino.length < 2) { box.style.display = 'none'; return; }
+  debounceClienteVenta = setTimeout(async () => {
+    const patron = `%${termino}%`;
+    const { data: porNombre } = await client.from('clientes').select('id,nombres,celular').ilike('nombres', patron).limit(6);
+    const { data: porCelular } = await client.from('clientes').select('id,nombres,celular').ilike('celular', patron).limit(6);
+    const vistos = {};
+    [...(porNombre || []), ...(porCelular || [])].forEach(c => { vistos[c.id] = c; });
+    const resultados = Object.values(vistos);
+    if (!resultados.length) { box.style.display = 'none'; return; }
+    box.innerHTML = resultados.map(c => `<div onclick="seleccionarClienteVenta('${c.id}', '${c.nombres.replace(/'/g, "\\'")}')">${c.nombres} · ${c.celular}</div>`).join('');
+    box.style.display = 'block';
+  }, 300);
+}
+function seleccionarClienteVenta(id, nombre) {
+  ventaSeleccion.clienteId = id;
+  ventaSeleccion.clienteNombre = nombre;
+  document.getElementById('ventaClienteBuscar').value = nombre;
+  document.getElementById('ventaClienteResultados').style.display = 'none';
+}
+function toggleCamposCredito() {
+  const esCredito = document.querySelector('input[name="ventaTipo"]:checked').value === 'credito';
+  document.getElementById('ventaCamposCredito').classList.toggle('visible', esCredito);
+}
+function toggleFechaManual() {
+  const manual = document.getElementById('ventaFrecuencia').value === 'manual';
+  document.getElementById('ventaCampoFechaManual').classList.toggle('visible', manual);
+}
+async function guardarVenta() {
+  if (!ventaSeleccion.productoId) { mostrarFlash('Elige un producto de la galería.', 'error'); return; }
+  if (!ventaSeleccion.clienteId) { mostrarFlash('Busca y selecciona un cliente de la lista.', 'error'); return; }
+
+  const producto = productos.find(p => p.id === ventaSeleccion.productoId);
+  const cantidad = Number(document.getElementById('ventaCantidad').value || 1);
+  const precioUnitario = Number(document.getElementById('ventaPrecioUnitario').value || producto.precio_venta);
+  const montoTotal = Math.round(precioUnitario * cantidad * 100) / 100;
+  const tipoVenta = document.querySelector('input[name="ventaTipo"]:checked').value;
+  const hoy = hoyStr();
+
+  const datos = {
+    cliente_id: ventaSeleccion.clienteId,
+    producto_id: ventaSeleccion.productoId,
+    cantidad, precio_unitario: precioUnitario, costo_unitario: producto.costo,
+    monto_total: montoTotal, tipo_venta: tipoVenta, fecha_venta: hoy,
+    notas: document.getElementById('ventaNotas').value.trim() || null,
+    creado_por: sesion.user.id,
+  };
+
+  if (tipoVenta === 'credito') {
+    const adelanto = Number(document.getElementById('ventaAdelanto').value || 0);
+    const saldo = Math.round((montoTotal - adelanto) * 100) / 100;
+    const frecuencia = document.getElementById('ventaFrecuencia').value;
+    const fechaManual = document.getElementById('ventaFechaManual').value || null;
+    datos.adelanto = adelanto;
+    datos.frecuencia_cobro = frecuencia;
+    if (saldo <= 0) { datos.saldo_pendiente = 0; datos.estado = 'pagado'; datos.proxima_fecha_cobro = null; }
+    else { datos.saldo_pendiente = saldo; datos.estado = 'pendiente'; datos.proxima_fecha_cobro = calcularProximaFecha(frecuencia, hoy, fechaManual); }
+  } else {
+    datos.adelanto = 0; datos.saldo_pendiente = 0; datos.estado = 'pagado';
+    datos.frecuencia_cobro = null; datos.proxima_fecha_cobro = null;
+  }
+
+  const { data, error } = await client.from('ventas').insert(datos).select().single();
+  if (error) { mostrarFlash('Error al registrar la venta: ' + error.message, 'error'); return; }
+
+  ventaSeleccion = { productoId: null, clienteId: null, clienteNombre: '' };
+  document.getElementById('ventaClienteBuscar').value = '';
+  mostrarFlash('Venta registrada correctamente', 'success');
+  abrirVentaDetalle(data.id);
+}
+
+/* =========================================================
+   VENTA DETALLE + COBROS
+   ========================================================= */
+async function abrirVentaDetalle(id) {
+  ventaDetalleActual = id;
+  const { data: v } = await client.from('ventas').select('*, clientes(id,nombres,celular), productos(id,nombre)').eq('id', id).single();
+  if (!v) return;
+
+  document.getElementById('vdCodigo').textContent = v.codigo;
+  const badge = document.getElementById('vdEstadoBadge');
+  badge.textContent = v.estado; badge.className = 'badge badge-' + v.estado;
+  document.getElementById('vdCliente').textContent = v.clientes ? v.clientes.nombres : '—';
+  document.getElementById('vdProducto').textContent = v.productos ? v.productos.nombre : '—';
+  document.getElementById('vdCantidad').textContent = v.cantidad;
+  document.getElementById('vdTotal').textContent = money(v.monto_total);
+
+  const esCredito = v.tipo_venta === 'credito';
+  ['vdAdelantoBox', 'vdSaldoBox', 'vdFrecuenciaBox', 'vdProximaBox'].forEach(id2 => document.getElementById(id2).style.display = esCredito ? 'block' : 'none');
+  if (esCredito) {
+    document.getElementById('vdAdelanto').textContent = money(v.adelanto);
+    document.getElementById('vdSaldo').innerHTML = `<span class="${v.saldo_pendiente > 0 ? 'texto-negativo' : 'texto-positivo'}">${money(v.saldo_pendiente)}</span>`;
+    document.getElementById('vdFrecuencia').textContent = v.frecuencia_cobro || '—';
+    document.getElementById('vdProxima').textContent = v.proxima_fecha_cobro || '—';
+  }
+
+  const mostrarCobroForm = esCredito && v.estado === 'pendiente';
+  document.getElementById('vdCobroForm').style.display = mostrarCobroForm ? 'block' : 'none';
+  if (mostrarCobroForm) {
+    document.getElementById('cobroFecha').value = hoyStr();
+    document.getElementById('cobroMonto').value = '';
+    document.getElementById('vdNuevaFecha').value = v.proxima_fecha_cobro || '';
+    document.getElementById('vdWhatsappRecordar').href = linkWhatsappRecordatorio(v);
+  }
+
+  const { data: cobros } = await client.from('cobros').select('*').eq('venta_id', id).order('fecha_cobro', { ascending: false });
+  document.getElementById('vdCobrosBody').innerHTML = (cobros || []).length ? cobros.map(c => `
+    <tr><td>${c.fecha_cobro}</td><td>${money(c.monto)}</td><td>${c.metodo_pago}</td></tr>
+  `).join('') : '<tr><td colspan="3">Sin cobros registrados.</td></tr>';
+
+  mostrarVista('ventaDetalle');
+}
+function linkWhatsappRecordatorio(v) {
+  const cliente = v.clientes || {};
+  const producto = v.productos || {};
+  let msj = `Hola ${cliente.nombres || ''}, te recuerdo que tienes un saldo pendiente de ${money(v.saldo_pendiente)} por ${producto.nombre || 'tu compra'}`;
+  msj += v.proxima_fecha_cobro ? `, con cobro programado para el ${v.proxima_fecha_cobro}.` : '.';
+  const numero = normalizarCelularPE(cliente.celular);
+  return `https://wa.me/${numero}?text=${encodeURIComponent(msj)}`;
+}
+async function recalcularVenta(ventaId) {
+  const { data: venta } = await client.from('ventas').select('*').eq('id', ventaId).single();
+  if (venta.tipo_venta !== 'credito') return;
+  const { data: cobros } = await client.from('cobros').select('monto, fecha_cobro').eq('venta_id', ventaId);
+  const totalCobrado = (cobros || []).reduce((s, c) => s + Number(c.monto), 0);
+  let saldo = Number(venta.monto_total) - Number(venta.adelanto) - totalCobrado;
+  saldo = Math.max(Math.round(saldo * 100) / 100, 0);
+
+  const datos = { saldo_pendiente: saldo };
+  if (saldo <= 0) {
+    datos.estado = 'pagado'; datos.proxima_fecha_cobro = null;
+  } else {
+    datos.estado = 'pendiente';
+    if ((venta.frecuencia_cobro === 'quincena' || venta.frecuencia_cobro === 'fin_de_mes') && cobros.length) {
+      const ultimaFecha = cobros.map(c => c.fecha_cobro).sort().slice(-1)[0];
+      datos.proxima_fecha_cobro = calcularProximaFecha(venta.frecuencia_cobro, ultimaFecha, null);
+    }
+  }
+  await client.from('ventas').update(datos).eq('id', ventaId);
+}
+async function registrarCobro() {
+  const monto = Number(document.getElementById('cobroMonto').value);
+  if (!monto || monto <= 0) { mostrarFlash('El monto debe ser mayor a cero.', 'error'); return; }
+  const datos = {
+    venta_id: ventaDetalleActual,
+    fecha_cobro: document.getElementById('cobroFecha').value || hoyStr(),
+    monto,
+    metodo_pago: document.getElementById('cobroMetodo').value,
+    registrado_por: sesion.user.id,
+  };
+  const { error } = await client.from('cobros').insert(datos);
+  if (error) { mostrarFlash('Error al registrar el cobro: ' + error.message, 'error'); return; }
+  await recalcularVenta(ventaDetalleActual);
+  mostrarFlash('Cobro registrado', 'success');
+  abrirVentaDetalle(ventaDetalleActual);
+}
+async function actualizarProximaFecha() {
+  const nuevaFecha = document.getElementById('vdNuevaFecha').value || null;
+  await client.from('ventas').update({ proxima_fecha_cobro: nuevaFecha }).eq('id', ventaDetalleActual);
+  mostrarFlash('Próxima fecha de cobro actualizada', 'success');
+  abrirVentaDetalle(ventaDetalleActual);
+}
+
+/* =========================================================
+   POR COBRAR
+   ========================================================= */
+async function cargarPorCobrar() {
+  const { data } = await client.from('ventas')
+    .select('id, saldo_pendiente, proxima_fecha_cobro, clientes(nombres,celular), productos(nombre)')
+    .eq('estado', 'pendiente')
+    .order('proxima_fecha_cobro');
+  const hoy = hoyStr();
+  document.getElementById('porCobrarBody').innerHTML = (data || []).length ? data.map(v => `
+    <tr class="${v.proxima_fecha_cobro && v.proxima_fecha_cobro < hoy ? 'fila-vencida' : ''}">
+      <td class="clicable" onclick="abrirVentaDetalle('${v.id}')">${v.clientes ? v.clientes.nombres : '—'}</td>
+      <td class="clicable" onclick="abrirVentaDetalle('${v.id}')">${v.productos ? v.productos.nombre : '—'}</td>
+      <td class="clicable" onclick="abrirVentaDetalle('${v.id}')">${money(v.saldo_pendiente)}</td>
+      <td class="clicable" onclick="abrirVentaDetalle('${v.id}')">${v.proxima_fecha_cobro || '—'}</td>
+      <td><a class="btn btn-whatsapp btn-sm" href="${linkWhatsappRecordatorio(v)}" target="_blank" rel="noopener">Recordar</a></td>
+    </tr>`).join('') : '<tr><td colspan="5">No tienes créditos pendientes de cobro. 🎉</td></tr>';
+}
+
+/* =========================================================
+   ARRANQUE
+   ========================================================= */
+revisarSesion();
+</script>
+</body>
+</html>

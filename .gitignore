@@ -4,3 +4,13 @@ __pycache__/
 *.pyc
 .DS_Store
 server.log
+
+# Version anterior del proyecto (backend Flask + Render), reemplazada por
+# index.html (app estatica). Se queda en disco como referencia, pero no se
+# sube al repo.
+app/
+scripts/
+run.py
+requirements.txt
+Procfile
+.env.example

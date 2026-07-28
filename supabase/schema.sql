@@ -1,18 +1,12 @@
 -- Ejecutar en el SQL Editor de Supabase (proyecto nuevo, capa gratuita)
 -- Sistema de ventas (contado / credito) con catalogo de productos.
+-- App estatica: se accede directo desde el navegador con la publishable
+-- key + Supabase Auth (sin backend propio), por eso todas las tablas usan
+-- Row Level Security.
 
 create extension if not exists "pgcrypto";
 
 create sequence ventas_codigo_seq start 1;
-
-create table usuarios (
-  id uuid primary key default gen_random_uuid(),
-  nombre text not null,
-  email text not null unique,
-  password_hash text not null,
-  rol text not null default 'admin',
-  creado_en timestamptz not null default now()
-);
 
 create table clientes (
   id uuid primary key default gen_random_uuid(),
@@ -35,7 +29,7 @@ create table productos (
   imagen_url text,
   imagen_url_2 text,
   imagen_url_3 text,
-  origen text not null default 'manual',   -- 'scrapeado' | 'manual'
+  origen text not null default 'manual',
   url_referencia text,
   precio_referencia numeric(10,2),
   activo boolean not null default true,
@@ -59,7 +53,7 @@ create table ventas (
   estado text not null default 'pagado' check (estado in ('pagado', 'pendiente')),
   fecha_venta date not null default current_date,
   notas text,
-  creado_por uuid references usuarios(id),
+  creado_por uuid references auth.users(id),
   creado_en timestamptz not null default now()
 );
 
@@ -70,7 +64,7 @@ create table cobros (
   monto numeric(10,2) not null,
   metodo_pago text not null default 'efectivo' check (metodo_pago in ('efectivo', 'yape', 'transferencia')),
   notas text,
-  registrado_por uuid references usuarios(id),
+  registrado_por uuid references auth.users(id),
   creado_en timestamptz not null default now()
 );
 
@@ -79,17 +73,33 @@ create index idx_ventas_producto on ventas(producto_id);
 create index idx_ventas_estado on ventas(estado);
 create index idx_cobros_venta on cobros(venta_id);
 
--- Nota de seguridad: esta app accede a Supabase SOLO desde el backend Flask
--- usando la service_role key (nunca se expone al navegador), por lo que no
--- se definen politicas de Row Level Security: el control de acceso vive en
--- el servidor Flask (login de staff + rutas protegidas).
+-- Row Level Security: la publishable key SI respeta RLS (a diferencia de la
+-- service_role que usaba la version anterior con backend Flask). Cualquier
+-- usuario de Supabase Auth logueado tiene acceso completo -- es un sistema
+-- de 1-2 personas de confianza, no hace falta granularidad por fila.
+alter table clientes enable row level security;
+alter table productos enable row level security;
+alter table ventas enable row level security;
+alter table cobros enable row level security;
+
+create policy "auth_full_access" on clientes for all to authenticated using (true) with check (true);
+create policy "auth_full_access" on productos for all to authenticated using (true) with check (true);
+create policy "auth_full_access" on ventas for all to authenticated using (true) with check (true);
+create policy "auth_full_access" on cobros for all to authenticated using (true) with check (true);
+
+-- Politicas de Storage (bucket "productos", debe crearse como publico desde
+-- el dashboard): la lectura publica ya la da el bucket publico, esto
+-- habilita subir/editar/borrar desde el navegador autenticado.
+create policy "auth_upload_productos" on storage.objects for insert to authenticated with check (bucket_id = 'productos');
+create policy "auth_update_productos" on storage.objects for update to authenticated using (bucket_id = 'productos');
+create policy "auth_delete_productos" on storage.objects for delete to authenticated using (bucket_id = 'productos');
 
 -- Si al crear el proyecto desactivaste "Automatically expose new tables",
--- corre tambien esto para que el service_role tenga permisos (incluye las
--- secuencias: sin esto, insertar en `ventas` falla con "permission denied
--- for sequence ventas_codigo_seq" porque el codigo VT-000001 se genera con
--- nextval() en esa secuencia):
--- grant all privileges on all tables in schema public to service_role;
--- grant all privileges on all sequences in schema public to service_role;
--- alter default privileges in schema public grant all privileges on tables to service_role;
--- alter default privileges in schema public grant all privileges on sequences to service_role;
+-- el rol `authenticated` no recibe permisos de tabla por defecto (RLS solo
+-- controla filas, no la tabla en si) -- sin esto la app falla con
+-- "permission denied for table X":
+grant select, insert, update, delete on clientes, productos, ventas, cobros to authenticated;
+grant usage, select on sequence ventas_codigo_seq to authenticated;
+
+-- Crear los usuarios de acceso desde Authentication > Users en el dashboard
+-- de Supabase (o via el admin API) -- no hay registro publico.
