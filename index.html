@@ -164,6 +164,15 @@ label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-
 .checkbox-linea { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .checkbox-linea input { width: auto; margin: 0; }
 .checkbox-linea label { margin: 0; }
+.form-inline { display: flex; gap: 8px; align-items: center; }
+.form-inline input { margin: 0; }
+
+/* ---------- Stock ---------- */
+.stock-tag { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; display: inline-block; margin-top: 2px; }
+.stock-tag.ok { background: #e6f7ec; color: #1f7a3f; }
+.stock-tag.bajo { background: #fff6dc; color: #9a7500; }
+.stock-tag.agotado { background: #fdeceb; color: var(--rojo); }
+.producto-card.agotado { opacity: 0.55; }
 </style>
 </head>
 <body>
@@ -198,6 +207,7 @@ label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-
         <div class="card"><span class="card-numero alerta" id="dashPorCobrar">S/ 0.00</span><span class="card-label">Por cobrar</span></div>
         <div class="card"><span class="card-numero" id="dashInversion">S/ 0.00</span><span class="card-label">Inversión (costo vendido)</span></div>
         <div class="card"><span class="card-numero positivo" id="dashGanancia">S/ 0.00</span><span class="card-label">Ganancia realizada</span></div>
+        <div class="card" id="dashStockCard"><span class="card-numero" id="dashStockBajo">0</span><span class="card-label">Productos con stock bajo</span></div>
       </div>
       <h2>Créditos próximos a cobrar</h2>
       <div class="tabla-scroll">
@@ -207,6 +217,14 @@ label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-
         </table>
       </div>
       <button class="btn btn-secundario" onclick="mostrarVista('porCobrar')">Ver todos</button>
+
+      <h2>Por reponer</h2>
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th>Producto</th><th>Stock</th></tr></thead>
+          <tbody id="dashStockBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ---- Productos ---- -->
@@ -224,6 +242,13 @@ label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-
         <div><strong>Costo</strong><span id="pdCosto"></span></div>
         <div><strong>Precio venta</strong><span id="pdPrecio"></span></div>
         <div><strong>Stock</strong><span id="pdStock"></span></div>
+      </div>
+      <div id="pdReponerBox" style="display:none; margin-bottom:16px;">
+        <label>Reponer stock (agregar unidades)</label>
+        <div class="form-inline">
+          <input type="number" min="1" id="pdReponerCantidad" style="width:100px; margin:0;">
+          <button class="btn btn-sm" onclick="reponerStock()">+ Agregar</button>
+        </div>
       </div>
       <p id="pdDescripcion" style="white-space:pre-line; font-size:0.9rem;"></p>
       <a class="btn btn-whatsapp" id="pdWhatsapp" href="#" target="_blank" rel="noopener" style="display:block; margin-bottom:10px;">Compartir por WhatsApp</a>
@@ -446,6 +471,7 @@ const SB_KEY = 'sb_publishable_Qd9dh6Q9TBqijI4-AScF1A_bVB0OxBt';
 const client = createClient(SB_URL, SB_KEY);
 
 const EMPRESA_WHATSAPP = ''; // opcional, no se usa por ahora
+const UMBRAL_STOCK_BAJO = 3; // a partir de cuantas unidades o menos se avisa "por reponer"
 
 /* =========================================================
    ESTADO GLOBAL
@@ -457,6 +483,7 @@ let ventaSeleccion = { productoId: null, clienteId: null, clienteNombre: '' };
 let clienteVinoDeVenta = false; // si el modal "nuevo cliente" se abrio desde el flujo de venta
 let ventaDetalleActual = null;  // id de la venta abierta en vistaVentaDetalle
 let clienteDetalleActual = null;
+let productoDetalleActual = null; // producto abierto en vistaProductoDetalle
 let pilaVistas = [];             // para el boton "volver"
 
 /* =========================================================
@@ -606,6 +633,18 @@ async function cargarDashboard() {
   document.getElementById('dashInversion').textContent = money(totalInversion);
   document.getElementById('dashGanancia').textContent = money(gananciaRealizada);
 
+  const { data: productosStock } = await client.from('productos')
+    .select('id, nombre, stock').eq('activo', true).not('stock', 'is', null)
+    .lte('stock', UMBRAL_STOCK_BAJO).order('stock');
+  const stockCard = document.getElementById('dashStockCard');
+  const bajos = productosStock || [];
+  document.getElementById('dashStockBajo').textContent = bajos.length;
+  stockCard.querySelector('.card-numero').className = 'card-numero ' + (bajos.length ? 'alerta' : 'positivo');
+  document.getElementById('dashStockBody').innerHTML = bajos.length ? bajos.map(p => `
+    <tr class="clicable ${p.stock <= 0 ? 'fila-vencida' : ''}" onclick="abrirProductoDetalle('${p.id}')">
+      <td>${p.nombre}</td><td>${p.stock <= 0 ? 'Agotado' : p.stock}</td>
+    </tr>`).join('') : '<tr><td colspan="2">Todo el stock está en buen nivel.</td></tr>';
+
   const pendientes = (ventas || []).filter(v => v.estado === 'pendiente')
     .sort((a, b) => (a.proxima_fecha_cobro || '9999-99-99').localeCompare(b.proxima_fecha_cobro || '9999-99-99'))
     .slice(0, 5);
@@ -626,11 +665,22 @@ async function cargarProductos() {
   productos = data || [];
   renderProductosGrid();
 }
+function stockBadgeHTML(stock) {
+  if (stock === null || stock === undefined) return '';
+  if (stock <= 0) return '<span class="stock-tag agotado">Agotado</span>';
+  if (stock <= UMBRAL_STOCK_BAJO) return `<span class="stock-tag bajo">Quedan ${stock}</span>`;
+  return `<span class="stock-tag ok">Quedan ${stock}</span>`;
+}
 function tarjetaProductoHTML(p, onclickJS) {
   const img = p.imagen_url ? `<img src="${p.imagen_url}" alt="${p.nombre}">` : `<div class="sin-foto">Sin foto</div>`;
-  return `<button type="button" class="producto-card" onclick="${onclickJS}">
+  const agotado = p.stock !== null && p.stock !== undefined && p.stock <= 0;
+  return `<button type="button" class="producto-card ${agotado ? 'agotado' : ''}" onclick="${onclickJS}">
     ${img}
-    <div class="info"><span class="nombre">${p.nombre}</span><span class="precio">${money(p.precio_venta)}</span></div>
+    <div class="info">
+      <span class="nombre">${p.nombre}</span>
+      <span class="precio">${money(p.precio_venta)}</span><br>
+      ${stockBadgeHTML(p.stock)}
+    </div>
   </button>`;
 }
 function renderProductosGrid() {
@@ -641,18 +691,33 @@ async function abrirProductoDetalle(id) {
   let p = productos.find(x => x.id === id);
   if (!p) { const { data } = await client.from('productos').select('*').eq('id', id).single(); p = data; }
   if (!p) return;
+  productoDetalleActual = p;
   document.getElementById('pdFotos').innerHTML = [p.imagen_url, p.imagen_url_2, p.imagen_url_3]
     .filter(Boolean).map(u => `<img src="${u}">`).join('') || '';
   document.getElementById('pdNombre').textContent = p.nombre;
   document.getElementById('pdCategoria').textContent = p.categoria;
   document.getElementById('pdCosto').textContent = money(p.costo);
   document.getElementById('pdPrecio').textContent = money(p.precio_venta);
-  document.getElementById('pdStock').textContent = (p.stock === null || p.stock === undefined) ? 'No controlado' : p.stock;
+  const sinControlar = p.stock === null || p.stock === undefined;
+  document.getElementById('pdStock').innerHTML = sinControlar ? 'No controlado' : `${p.stock} ${stockBadgeHTML(p.stock)}`;
+  document.getElementById('pdReponerBox').style.display = 'block';
+  document.getElementById('pdReponerCantidad').value = '';
   document.getElementById('pdDescripcion').textContent = p.descripcion || '';
   document.getElementById('pdWhatsapp').href = linkWhatsappProducto(p);
   document.getElementById('pdVender').onclick = () => { ventaSeleccion.productoId = p.id; mostrarVista('ventaNueva'); };
   document.getElementById('pdEditar').onclick = () => abrirModalProducto(p);
   mostrarVista('productoDetalle');
+}
+async function reponerStock() {
+  const cantidad = Number(document.getElementById('pdReponerCantidad').value);
+  if (!cantidad || cantidad <= 0) { mostrarFlash('Ingresa cuántas unidades vas a agregar.', 'error'); return; }
+  const p = productoDetalleActual;
+  const nuevoStock = (p.stock === null || p.stock === undefined ? 0 : p.stock) + cantidad;
+  const { error } = await client.from('productos').update({ stock: nuevoStock }).eq('id', p.id);
+  if (error) { mostrarFlash('Error al reponer stock: ' + error.message, 'error'); return; }
+  mostrarFlash(`Stock actualizado: ahora hay ${nuevoStock} unidades.`, 'success');
+  await cargarProductos();
+  abrirProductoDetalle(p.id);
 }
 // Secciones que marcan el final de la lista de beneficios dentro de la
 // descripcion (para no seguir leyendo "Modo de uso", "Especificaciones", etc.
@@ -867,9 +932,20 @@ async function prepararVentaNueva() {
 function elegirProductoVenta(id, marcarSeleccion = true) {
   const p = productos.find(x => x.id === id);
   if (!p) return;
+  if (p.stock !== null && p.stock !== undefined && p.stock <= 0) {
+    mostrarFlash('Ese producto está agotado. Repón stock desde su ficha antes de venderlo.', 'error');
+    return;
+  }
   ventaSeleccion.productoId = id;
+  const cantidadInput = document.getElementById('ventaCantidad');
+  if (p.stock !== null && p.stock !== undefined) {
+    cantidadInput.max = p.stock;
+    if (Number(cantidadInput.value) > p.stock) cantidadInput.value = p.stock;
+  } else {
+    cantidadInput.removeAttribute('max');
+  }
   document.getElementById('ventaPrecioUnitario').value = p.precio_venta;
-  document.getElementById('ventaProductoElegido').innerHTML = `<span class="texto-positivo">Elegiste: ${p.nombre}</span>`;
+  document.getElementById('ventaProductoElegido').innerHTML = `<span class="texto-positivo">Elegiste: ${p.nombre}</span> ${stockBadgeHTML(p.stock)}`;
   if (marcarSeleccion !== false) {
     document.querySelectorAll('#ventaGaleria .producto-card').forEach(c => c.classList.remove('seleccionado'));
   }
@@ -916,6 +992,10 @@ async function guardarVenta() {
 
   const producto = productos.find(p => p.id === ventaSeleccion.productoId);
   const cantidad = Number(document.getElementById('ventaCantidad').value || 1);
+  if (producto.stock !== null && producto.stock !== undefined && cantidad > producto.stock) {
+    mostrarFlash(`Solo quedan ${producto.stock} unidades disponibles de ese producto.`, 'error');
+    return;
+  }
   const precioUnitario = Number(document.getElementById('ventaPrecioUnitario').value || producto.precio_venta);
   const montoTotal = Math.round(precioUnitario * cantidad * 100) / 100;
   const tipoVenta = document.querySelector('input[name="ventaTipo"]:checked').value;
@@ -946,6 +1026,10 @@ async function guardarVenta() {
 
   const { data, error } = await client.from('ventas').insert(datos).select().single();
   if (error) { mostrarFlash('Error al registrar la venta: ' + error.message, 'error'); return; }
+
+  if (producto.stock !== null && producto.stock !== undefined) {
+    await client.from('productos').update({ stock: producto.stock - cantidad }).eq('id', producto.id);
+  }
 
   ventaSeleccion = { productoId: null, clienteId: null, clienteNombre: '' };
   document.getElementById('ventaClienteBuscar').value = '';
