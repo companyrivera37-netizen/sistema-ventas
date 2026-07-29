@@ -654,9 +654,79 @@ async function abrirProductoDetalle(id) {
   document.getElementById('pdEditar').onclick = () => abrirModalProducto(p);
   mostrarVista('productoDetalle');
 }
+// Secciones que marcan el final de la lista de beneficios dentro de la
+// descripcion (para no seguir leyendo "Modo de uso", "Especificaciones", etc.
+// como si fueran beneficios).
+const SECCIONES_FIN_BENEFICIOS = ['modo', 'especificaciones', 'recomendaciones', 'caracter'];
+
+function recortarPalabra(texto, maximo) {
+  if (texto.length <= maximo) return texto;
+  const corte = texto.slice(0, maximo);
+  const ultimoEspacio = corte.lastIndexOf(' ');
+  return (ultimoEspacio > 0 ? corte.slice(0, ultimoEspacio) : corte).trim() + '...';
+}
+
+// Estrategia 1: la descripcion trae un encabezado tipo "Beneficios" o
+// "10 beneficios claves de X:" -- se toman las lineas siguientes (sueltas o
+// numeradas "1.-Titulo: explicacion") hasta la siguiente seccion conocida.
+function beneficiosPorEncabezado(lineas) {
+  const idx = lineas.findIndex(l => /beneficio/i.test(l));
+  if (idx === -1) return [];
+  const patronNumerado = /^\d+[\.\)-]+\s*(.+)$/;
+  const items = [];
+  for (let i = idx + 1; i < lineas.length && items.length < 5; i++) {
+    let linea = lineas[i];
+    if (/beneficio/i.test(linea)) continue; // el bloque a veces viene duplicado en la fuente
+    if (SECCIONES_FIN_BENEFICIOS.some(s => linea.toLowerCase().startsWith(s))) break;
+    const m = linea.match(patronNumerado);
+    if (m) linea = m[1];
+    const partes = linea.split(':');
+    if (partes.length > 1 && partes[0].length < 40) linea = partes[0].trim(); // solo el titulo corto del beneficio
+    items.push(recortarPalabra(linea, 90));
+  }
+  return items;
+}
+
+// Estrategia 2 (respaldo): muchas fichas no traen un encabezado "Beneficios"
+// explicito, pero si un tramo de frases cortas seguidas que SI son
+// beneficios ("Aporta energia natural y sostenida.", "Ayuda a reducir la
+// fatiga...") -- se detectan por ser varias lineas cortas consecutivas que
+// terminan en punto, sin depender de ningun titulo.
+function beneficiosPorBloqueCorto(lineas) {
+  for (let i = 0; i < lineas.length; i++) {
+    const candidatos = [];
+    let j = i;
+    while (j < lineas.length && lineas[j].length <= 110 && /[.!?]\s*$/.test(lineas[j])) {
+      candidatos.push(lineas[j]);
+      j++;
+    }
+    if (candidatos.length >= 3) return candidatos.slice(0, 5);
+  }
+  return [];
+}
+
+// Busca una lista de beneficios dentro de la descripcion (el formato varia
+// segun la tienda de origen) y devuelve una lista corta de frases, no el
+// bloque de texto completo -- pensado para que el cliente lo lea en 5
+// segundos en WhatsApp, no para que se lea la ficha entera del producto.
+function extraerBeneficios(descripcion) {
+  if (!descripcion) return [];
+  const lineas = descripcion.split('\n').map(l => l.trim()).filter(Boolean);
+  const porEncabezado = beneficiosPorEncabezado(lineas);
+  const items = porEncabezado.length ? porEncabezado : beneficiosPorBloqueCorto(lineas);
+  return [...new Set(items)];
+}
+
 function linkWhatsappProducto(p) {
-  const partes = [p.nombre];
-  if (p.descripcion) partes.push(p.descripcion.trim());
+  const beneficios = extraerBeneficios(p.descripcion);
+  const partes = [`*${p.nombre}*`];
+  if (beneficios.length) {
+    partes.push(beneficios.map(b => `✅ ${b}`).join('\n'));
+  } else if (p.descripcion) {
+    const primeraLinea = p.descripcion.split('\n').map(l => l.trim()).find(Boolean);
+    if (primeraLinea) partes.push(recortarPalabra(primeraLinea, 200));
+  }
+  partes.push('¿Te interesa? Escríbeme y coordinamos 😊');
   return 'https://wa.me/?text=' + encodeURIComponent(partes.join('\n\n'));
 }
 
