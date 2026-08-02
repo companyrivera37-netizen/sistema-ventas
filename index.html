@@ -262,7 +262,7 @@ label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-
       <input type="text" id="clientesBuscar" placeholder="Buscar por nombre o celular" oninput="renderClientesListado()">
       <div class="tabla-scroll">
         <table class="tabla">
-          <thead><tr><th>Nombre</th><th>Celular</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Celular</th><th>Vendedora</th></tr></thead>
           <tbody id="clientesBody"></tbody>
         </table>
       </div>
@@ -477,6 +477,8 @@ const UMBRAL_STOCK_BAJO = 3; // a partir de cuantas unidades o menos se avisa "p
    ESTADO GLOBAL
    ========================================================= */
 let sesion = null;
+let miPerfil = null;        // fila de `perfiles` del usuario logueado
+let esAdmin = false;        // true solo para la cuenta admin (ve todo, no solo lo suyo)
 let productos = [];         // catalogo completo (activos)
 let clientes = [];          // cache simple para listado/detalle
 let ventaSeleccion = { productoId: null, clienteId: null, clienteNombre: '' };
@@ -592,7 +594,10 @@ async function revisarSesion() {
   const { data } = await client.auth.getSession();
   if (data.session) { sesion = data.session; iniciarApp(); }
 }
-function iniciarApp() {
+async function iniciarApp() {
+  const { data: perfil } = await client.from('perfiles').select('*').eq('id', sesion.user.id).single();
+  miPerfil = perfil;
+  esAdmin = perfil ? perfil.rol === 'admin' : false;
   document.getElementById('vistaLogin').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   mostrarVista('dashboard');
@@ -859,7 +864,7 @@ async function guardarProducto() {
    CLIENTES
    ========================================================= */
 async function cargarClientesTodos() {
-  const { data } = await client.from('clientes').select('*').order('creado_en', { ascending: false }).limit(200);
+  const { data } = await client.from('clientes').select('*, perfiles!creado_por(nombre)').order('creado_en', { ascending: false }).limit(200);
   clientes = data || [];
 }
 function renderClientesListado() {
@@ -868,8 +873,8 @@ function renderClientesListado() {
     ? clientes.filter(c => c.nombres.toLowerCase().includes(termino) || (c.celular || '').includes(termino))
     : clientes;
   document.getElementById('clientesBody').innerHTML = filtrados.length ? filtrados.map(c => `
-    <tr class="clicable" onclick="abrirClienteDetalle('${c.id}')"><td>${c.nombres}</td><td>${c.celular}</td></tr>
-  `).join('') : '<tr><td colspan="2">Aún no hay clientes registrados.</td></tr>';
+    <tr class="clicable" onclick="abrirClienteDetalle('${c.id}')"><td>${c.nombres}</td><td>${c.celular}</td><td>${c.perfiles ? c.perfiles.nombre : '—'}</td></tr>
+  `).join('') : '<tr><td colspan="3">Aún no hay clientes registrados.</td></tr>';
 }
 async function abrirClienteDetalle(id) {
   let c = clientes.find(x => x.id === id);
@@ -902,7 +907,7 @@ async function guardarCliente() {
   const nombres = document.getElementById('cliNombres').value.trim();
   const celular = document.getElementById('cliCelular').value.trim();
   if (!nombres || !celular) { errorEl.textContent = 'Nombre y celular son obligatorios.'; return; }
-  const datos = { nombres, celular, direccion: document.getElementById('cliDireccion').value.trim() || null };
+  const datos = { nombres, celular, direccion: document.getElementById('cliDireccion').value.trim() || null, creado_por: sesion.user.id };
   const { data, error } = await client.from('clientes').insert(datos).select().single();
   if (error) { errorEl.textContent = 'Error al guardar: ' + error.message; return; }
   cerrarModal('modalCliente');
