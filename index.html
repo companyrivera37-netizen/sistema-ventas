@@ -352,6 +352,16 @@ label { display: block; text-align: left; font-size: 0.85rem; color: var(--gris-
         <div id="vdProximaBox"><strong>Próximo cobro</strong><span id="vdProxima"></span></div>
       </div>
 
+      <button class="btn btn-secundario" style="margin-bottom:10px;" onclick="abrirEditarPrecio()">Modificar precio</button>
+      <div id="vdEditarPrecioBox" style="display:none; margin-bottom:16px;">
+        <label>Nuevo precio unitario</label>
+        <input type="number" step="0.01" min="0" id="vdNuevoPrecio">
+        <div class="form-inline">
+          <button class="btn btn-sm" onclick="guardarNuevoPrecio()">Guardar</button>
+          <button class="btn btn-sm btn-secundario" onclick="document.getElementById('vdEditarPrecioBox').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+
       <div id="vdCobroForm" style="display:none;">
         <a class="btn btn-whatsapp" id="vdWhatsappRecordar" href="#" target="_blank" rel="noopener" style="display:block; margin-bottom:14px;">Recordar por WhatsApp</a>
         <h2>Registrar cobro</h2>
@@ -484,6 +494,7 @@ let clientes = [];          // cache simple para listado/detalle
 let ventaSeleccion = { productoId: null, clienteId: null, clienteNombre: '' };
 let clienteVinoDeVenta = false; // si el modal "nuevo cliente" se abrio desde el flujo de venta
 let ventaDetalleActual = null;  // id de la venta abierta en vistaVentaDetalle
+let ventaDetalleData = null;    // fila completa de esa venta (para editar precio, etc.)
 let clienteDetalleActual = null;
 let productoDetalleActual = null; // producto abierto en vistaProductoDetalle
 let pilaVistas = [];             // para el boton "volver"
@@ -995,7 +1006,17 @@ async function guardarVenta() {
   if (!ventaSeleccion.productoId) { mostrarFlash('Elige un producto de la galería.', 'error'); return; }
   if (!ventaSeleccion.clienteId) { mostrarFlash('Busca y selecciona un cliente de la lista.', 'error'); return; }
 
-  const producto = productos.find(p => p.id === ventaSeleccion.productoId);
+  // Respaldo: si por algun motivo el producto elegido no esta en la cache
+  // local (ej. se recargo la galeria en otra pestaña), se busca directo en
+  // Supabase en vez de fallar en silencio con un error de JS invisible para
+  // el usuario (asi se veia el bug de "la venta no se registra").
+  let producto = productos.find(p => p.id === ventaSeleccion.productoId);
+  if (!producto) {
+    const { data } = await client.from('productos').select('*').eq('id', ventaSeleccion.productoId).single();
+    producto = data;
+  }
+  if (!producto) { mostrarFlash('No se pudo cargar el producto elegido, vuelve a seleccionarlo.', 'error'); return; }
+
   const cantidad = Number(document.getElementById('ventaCantidad').value || 1);
   if (producto.stock !== null && producto.stock !== undefined && cantidad > producto.stock) {
     mostrarFlash(`Solo quedan ${producto.stock} unidades disponibles de ese producto.`, 'error');
@@ -1049,6 +1070,8 @@ async function abrirVentaDetalle(id) {
   ventaDetalleActual = id;
   const { data: v } = await client.from('ventas').select('*, clientes(id,nombres,celular), productos(id,nombre)').eq('id', id).single();
   if (!v) return;
+  ventaDetalleData = v;
+  document.getElementById('vdEditarPrecioBox').style.display = 'none';
 
   document.getElementById('vdCodigo').textContent = v.codigo;
   const badge = document.getElementById('vdEstadoBadge');
@@ -1082,6 +1105,21 @@ async function abrirVentaDetalle(id) {
   `).join('') : '<tr><td colspan="3">Sin cobros registrados.</td></tr>';
 
   mostrarVista('ventaDetalle');
+}
+function abrirEditarPrecio() {
+  document.getElementById('vdNuevoPrecio').value = ventaDetalleData.precio_unitario;
+  document.getElementById('vdEditarPrecioBox').style.display = 'block';
+}
+async function guardarNuevoPrecio() {
+  const nuevoPrecio = Number(document.getElementById('vdNuevoPrecio').value);
+  if (!nuevoPrecio || nuevoPrecio <= 0) { mostrarFlash('Ingresa un precio válido.', 'error'); return; }
+  const v = ventaDetalleData;
+  const nuevoTotal = Math.round(nuevoPrecio * v.cantidad * 100) / 100;
+  const { error } = await client.from('ventas').update({ precio_unitario: nuevoPrecio, monto_total: nuevoTotal }).eq('id', v.id);
+  if (error) { mostrarFlash('Error al actualizar el precio: ' + error.message, 'error'); return; }
+  if (v.tipo_venta === 'credito') await recalcularVenta(v.id);
+  mostrarFlash('Precio actualizado correctamente', 'success');
+  abrirVentaDetalle(v.id);
 }
 function linkWhatsappRecordatorio(v) {
   const cliente = v.clientes || {};
@@ -1152,6 +1190,20 @@ async function cargarPorCobrar() {
       <td><a class="btn btn-whatsapp btn-sm" href="${linkWhatsappRecordatorio(v)}" target="_blank" rel="noopener">Recordar</a></td>
     </tr>`).join('') : '<tr><td colspan="5">No tienes créditos pendientes de cobro. 🎉</td></tr>';
 }
+
+/* =========================================================
+   RED DE SEGURIDAD: ningun error queda en silencio
+   ========================================================= */
+// Antes, un error de JS (ej. una promesa rechazada) simplemente no hacia
+// nada visible -- el usuario veia "no se guardo" sin ninguna pista. Con
+// esto, cualquier error inesperado se muestra como aviso rojo arriba.
+window.addEventListener('error', (evento) => {
+  mostrarFlash('Ocurrió un error inesperado: ' + evento.message, 'error');
+});
+window.addEventListener('unhandledrejection', (evento) => {
+  const msg = (evento.reason && evento.reason.message) ? evento.reason.message : String(evento.reason);
+  mostrarFlash('Ocurrió un error inesperado: ' + msg, 'error');
+});
 
 /* =========================================================
    ARRANQUE
