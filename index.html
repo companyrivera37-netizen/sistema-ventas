@@ -540,7 +540,12 @@ function money(n) { return 'S/ ' + Number(n || 0).toFixed(2); }
 function mostrarFlash(mensaje, tipo) {
   const box = document.getElementById('flashBox');
   box.innerHTML = `<div class="flash flash-${tipo}">${mensaje}</div>`;
-  setTimeout(() => { box.innerHTML = ''; }, 4000);
+  // Sin esto, un aviso (sobre todo un error) puede aparecer arriba de todo
+  // mientras el usuario esta con la pantalla desplazada hacia abajo llenando
+  // el formulario -- parece que "no paso nada" cuando en realidad si avisó,
+  // solo que fuera de la vista.
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => { box.innerHTML = ''; }, tipo === 'error' ? 6000 : 4000);
 }
 function abrirModal(id) { document.getElementById(id).classList.add('visible'); }
 function cerrarModal(id) { document.getElementById(id).classList.remove('visible'); }
